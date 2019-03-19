@@ -31,8 +31,9 @@ def upload_file():
 			file.save(fpath)
 
 			
-			retUrl = flask.url_for('uploaded_file', filename=fname)
-			retUrl = os.path.join(DOMAIN, *retUrl.split(os.sep))
+			relPath = flask.url_for('uploaded_file', filename=fname)
+			print(relPath)
+			retUrl = os.path.join(DOMAIN, *relPath.split(os.sep))
 			print(retUrl)
 			
 			# Run inference on file
