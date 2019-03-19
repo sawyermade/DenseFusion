@@ -1,6 +1,6 @@
 import os, sys, flask, werkzeug as wz
 
-DOMAIN = 'http://home.sawyer0.com:666'
+DOMAIN = 'http://home.sawyer0.com:80'
 ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg', 'gif', 'tiff', 'bmp'])
 UPLOAD_FOLDER = 'uploads'
 app = flask.Flask(__name__)
@@ -14,7 +14,10 @@ def allowedFile(fname):
 def main(port, upPath, domain=None):
 	global UPLOAD_FOLDER, app, DOMAIN
 	if domain:
-		DOMAIN = DOMAIN.split(':')[0] + ':' + str(port)
+		DOMAIN = 'http://' + domain + ':' + str(port)
+	if not os.path.exists(upPath):
+		os.makedirs(upPath)	
+	
 	UPLOAD_FOLDER = upPath
 	app.config['UPLOAD_FOLDER'] = upPath
 	app.run(port=port, host='0.0.0.0', debug=True)
@@ -25,16 +28,17 @@ def upload_file():
 	if flask.request.method == 'POST':
 		file = flask.request.files['file']
 		if file and allowedFile(file.filename):
-			print('**found file: {}'.format(file.filename))
+			# print('**found file: {}'.format(file.filename))
 			fname = wz.secure_filename(file.filename)
 			fpath = os.path.join(app.config['UPLOAD_FOLDER'], fname)
+			print(fpath)
 			file.save(fpath)
 
 			
 			relPath = flask.url_for('uploaded_file', filename=fname)
-			print(relPath)
+			# print(relPath)
 			retUrl = os.path.join(DOMAIN, *relPath.split(os.sep))
-			print(retUrl)
+			# print(retUrl)
 			
 			# Run inference on file
 			inf = None
@@ -49,7 +53,9 @@ def uploaded_file(filename):
 	return flask.send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 if __name__ == '__main__':
-	port = int(sys.argv[1])
+	domain, port = sys.argv[1].split(':')
+	port = int(port)
 	upPath = sys.argv[2]
+	# print(domain, port)
 
-	main(port, upPath)
+	main(port, upPath, domain)
