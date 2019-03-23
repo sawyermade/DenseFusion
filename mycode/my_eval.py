@@ -5,6 +5,23 @@ from lib.transformations import euler_matrix, quaternion_matrix, quaternion_from
 
 WIDTH, HEIGHT = 640, 480
 
+# norm = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+border_list = [-1, 40, 80, 120, 160, 200, 240, 280, 320, 360, 400, 440, 480, 520, 560, 600, 640, 680]
+xmap = np.array([[j for i in range(640)] for j in range(480)])
+ymap = np.array([[i for i in range(640)] for j in range(480)])
+cam_cx = 312.9869
+cam_cy = 241.3109
+cam_fx = 1066.778
+cam_fy = 1067.487
+cam_scale = 10000.0
+num_obj = 21
+img_width = 480
+img_length = 640
+num_points = 1000
+num_points_mesh = 500
+iteration = 2
+bs = 1
+
 # Gets bounding box
 def get_bbox(posecnn_rois):
 	rmin = int(posecnn_rois[idx][3]) + 1
@@ -52,7 +69,7 @@ def setupRS():
 	# Configs the camera params and enables streams
 	config = rs.config()
 	config.enable_stream(rs.stream.depth, WIDTH, HEIGHT, rs.format.z16, 30)
-	config.enable_stream(rs.stream.color, WIDTH, HEIGHT, rs.format.rgb8, 30)
+	config.enable_stream(rs.stream.color, WIDTH, HEIGHT, rs.format.bgr8, 30)
 
 	# Align object
 	align_to = rs.stream.color 
@@ -63,7 +80,12 @@ def setupRS():
 	return (pipeline, align)
 
 # Runs inference on the frames
-def streamImgs(pipeline, align):
+def streamImgs(pipeline, align, modelPath):
+	# estimator = PoseNet(num_points = num_points, num_obj = num_obj)
+	# estimator.cuda()
+	# estimator.load_state_dict(torch.load(modelPath))
+	# estimator.eval()
+
 	flag = True
 	while flag:
 		try:
@@ -73,11 +95,21 @@ def streamImgs(pipeline, align):
 			dframe = np.asanyarray(aframes.get_depth_frame().get_data())
 			cframe = np.asanyarray(aframes.get_color_frame().get_data())
 
-			# Runs inference on rgbd
-			pose = runInf(dframe, cframe)
+			# Visualize
+			# catframe = np.hstack((cframe, dframe))
+			cv.imshow('real sense', dframe)
+			k = cv.waitKey(100)
+			if k == 27:
+				cv.destroyAllWindows()
+				break
 
-		except:
+			# Runs inference on rgbd
+			# pose = runInf(dframe, cframe)
+
+
+		except Exception as e:
 			print('\nStreaming Stopped')
+			print('Exception: {}'.format(e))
 			flag = False
 			pipeline.stop()
 
@@ -86,7 +118,10 @@ def runInf(dframe, cframe):
 	pass
 
 if __name__ == '__main__':
+	# Arguments
+	modelPath = sys.argv[1]
+
 	# Test Camera setup
 	pipeline, align = setupRS()
-	streamImgs(pipeline, align)
+	streamImgs(pipeline, align, modelPath)
 	
