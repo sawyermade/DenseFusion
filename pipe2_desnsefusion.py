@@ -66,42 +66,128 @@ iteration = 2
 bs = 1
 
 def get_bbox(posecnn_rois):
-    rmin = int(posecnn_rois[idx][3]) + 1
-    rmax = int(posecnn_rois[idx][5]) - 1
-    cmin = int(posecnn_rois[idx][2]) + 1
-    cmax = int(posecnn_rois[idx][4]) - 1
-    r_b = rmax - rmin
-    for tt in range(len(border_list)):
-        if r_b > border_list[tt] and r_b < border_list[tt + 1]:
-            r_b = border_list[tt + 1]
-            break
-    c_b = cmax - cmin
-    for tt in range(len(border_list)):
-        if c_b > border_list[tt] and c_b < border_list[tt + 1]:
-            c_b = border_list[tt + 1]
-            break
-    center = [int((rmin + rmax) / 2), int((cmin + cmax) / 2)]
-    rmin = center[0] - int(r_b / 2)
-    rmax = center[0] + int(r_b / 2)
-    cmin = center[1] - int(c_b / 2)
-    cmax = center[1] + int(c_b / 2)
-    if rmin < 0:
-        delt = -rmin
-        rmin = 0
-        rmax += delt
-    if cmin < 0:
-        delt = -cmin
-        cmin = 0
-        cmax += delt
-    if rmax > img_width:
-        delt = rmax - img_width
-        rmax = img_width
-        rmin -= delt
-    if cmax > img_length:
-        delt = cmax - img_length
-        cmax = img_length
-        cmin -= delt
-    return rmin, rmax, cmin, cmax
+	rmin = int(posecnn_rois[idx][3]) + 1
+	rmax = int(posecnn_rois[idx][5]) - 1
+	cmin = int(posecnn_rois[idx][2]) + 1
+	cmax = int(posecnn_rois[idx][4]) - 1
+	r_b = rmax - rmin
+	for tt in range(len(border_list)):
+		if r_b > border_list[tt] and r_b < border_list[tt + 1]:
+			r_b = border_list[tt + 1]
+			break
+	c_b = cmax - cmin
+	for tt in range(len(border_list)):
+		if c_b > border_list[tt] and c_b < border_list[tt + 1]:
+			c_b = border_list[tt + 1]
+			break
+	center = [int((rmin + rmax) / 2), int((cmin + cmax) / 2)]
+	rmin = center[0] - int(r_b / 2)
+	rmax = center[0] + int(r_b / 2)
+	cmin = center[1] - int(c_b / 2)
+	cmax = center[1] + int(c_b / 2)
+	if rmin < 0:
+		delt = -rmin
+		rmin = 0
+		rmax += delt
+	if cmin < 0:
+		delt = -cmin
+		cmin = 0
+		cmax += delt
+	if rmax > img_width:
+		delt = rmax - img_width
+		rmax = img_width
+		rmin -= delt
+	if cmax > img_length:
+		delt = cmax - img_length
+		cmax = img_length
+		cmin -= delt
+	return rmin, rmax, cmin, cmax
+
+def downloadZip(url, outDir='uploads-pipe2/'): 
+	if not os.path.exists(outDir):
+		os.makedirs(outDir)
+
+	fname = os.path.join(outDir, 'tmp.zip') 
+	r = requests.get(url) 
+	with open(fname, 'wb') as of: 
+		of.write(r.content)
+
+	with ZipFile(fname, 'r') as zf:
+		# Gets csv file
+		flist = zf.namelist()
+		# print(flist)
+		for f in flist:
+			if f.endswith('csv'):
+				csvFile = zf.open(f, 'r')
+				csvList = []
+				for line in csvFile:
+					line = line.decode('utf-8')
+
+					# lineList = [str, float, str, int, int, int, int]
+					lineList = line.strip('\n').split(',')
+					lineList[1] = float(lineList[1])
+					lineList[3:] = [int(f) for f in lineList[3:]]
+					csvList.append(lineList)
+					# print(csvList[-1])
+				csvFile.close()
+				break
+
+		# Adds urllist.txt
+		urlDict = {}
+		with zf.open('urllist.txt') as uf:
+			for line in uf:
+				line = line.decode('utf-8')
+				# print(line)
+				urlstr, fname = line.strip('\n').split(',')
+				urlDict.update({fname : urlstr})
+		# print(urlDict)
+
+		# # Rips images out of zip file
+		objDict = {}
+		for i, lineList in enumerate(csvList):
+			fname, score, label, cmin, rmin, cmax, rmax = lineList
+			maskimg = np.array(Image.open(zf.open(fname)))
+			# maskimg[maskimg > 0] = 255
+			objDict.update({
+				i : {
+					'score' : score,
+					'label' : label,
+					'bb' 	: [cmin, rmin, cmax, rmax],
+					'mask'  : maskimg,
+					'fname' : fname, 
+					'url'   : urlDict[fname]
+				}
+			})
+
+		# Adds visualed image
+		fname = [f for f in flist if f.startswith('vis')][0]
+		vis = np.array(Image.open(zf.open(fname)))
+		vis = cv2.cvtColor(vis, cv2.COLOR_RGB2BGR)
+		objDict.update({'vis' : {'mask' : vis, 'fname' : fname, 'url' : urlDict[fname]}})
+
+		# Adds urllist
+		# print(urlDict[])
+
+		return objDict
+
+def upload(url, fpath):
+	with open(fpath, 'rb') as f:
+		files = {'file' : f}
+
+		try:
+			r = requests.post(url, files=files)
+			# print(r.text)
+			return r.text
+
+		except Exception as e:
+			print('Did not send file: {}\nException: {}'.format(fpath, e))
+			return None
+
+def allowedFile(fname):
+	if fname[-3:].lower() in ALLOWED_EXTENSIONS or fname[-4:].lower() in ALLOWED_EXTENSIONS:
+		return True
+	else:
+		return False
 
 @app.route('/{}/<filename>'.format(UPLOAD_FOLDER))
 def uploaded_file(filename):
@@ -109,7 +195,7 @@ def uploaded_file(filename):
 
 @app.route('/', methods=['GET', 'POST'])
 def upload_file():
-	# global logger, model
+	global refiner
 	if flask.request.method == 'POST':
 		file1 = flask.request.files['file1']
 		file2 = flask.request.files['file2']
@@ -122,6 +208,114 @@ def upload_file():
 			# print(fname1, fname2)
 			file1.save(fpath1)
 			file2.save(fpath2)
+
+			# Gets labels, bbox, and masks
+			retUrl = upload('http://127.0.0.1', fpath1)
+			objDict = downloadZip(retUrl)
+			print(objDict)
+
+			# Starts shit
+			img = Image.open(fpath1)
+			depth = np.array(fpath2)
+			# posecnn_meta = scio.loadmat('{0}/results_PoseCNN_RSS2018/{1}.mat'.format(ycb_toolbox_dir, '%06d' % now))
+			# label = np.array(posecnn_meta['labels'])
+			# posecnn_rois = np.array(posecnn_meta['rois'])
+
+			# lst = posecnn_rois[:, 1:2].flatten()
+			# my_result_wo_refine = []
+			# my_result = []
+			
+			# for idx in range(len(lst)):
+			# 	itemid = lst[idx]
+			# 	try:
+			# 		rmin, rmax, cmin, cmax = get_bbox(posecnn_rois)
+
+			# 		mask_depth = ma.getmaskarray(ma.masked_not_equal(depth, 0))
+			# 		mask_label = ma.getmaskarray(ma.masked_equal(label, itemid))
+			# 		mask = mask_label * mask_depth
+
+			# 		choose = mask[rmin:rmax, cmin:cmax].flatten().nonzero()[0]
+			# 		if len(choose) > num_points:
+			# 			c_mask = np.zeros(len(choose), dtype=int)
+			# 			c_mask[:num_points] = 1
+			# 			np.random.shuffle(c_mask)
+			# 			choose = choose[c_mask.nonzero()]
+			# 		else:
+			# 			choose = np.pad(choose, (0, num_points - len(choose)), 'wrap')
+
+			# 		depth_masked = depth[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
+			# 		xmap_masked = xmap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
+			# 		ymap_masked = ymap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
+			# 		choose = np.array([choose])
+
+			# 		pt2 = depth_masked / cam_scale
+			# 		pt0 = (ymap_masked - cam_cx) * pt2 / cam_fx
+			# 		pt1 = (xmap_masked - cam_cy) * pt2 / cam_fy
+			# 		cloud = np.concatenate((pt0, pt1, pt2), axis=1)
+
+			# 		img_masked = np.array(img)[:, :, :3]
+			# 		img_masked = np.transpose(img_masked, (2, 0, 1))
+			# 		img_masked = img_masked[:, rmin:rmax, cmin:cmax]
+
+			# 		cloud = torch.from_numpy(cloud.astype(np.float32))
+			# 		choose = torch.LongTensor(choose.astype(np.int32))
+			# 		img_masked = norm(torch.from_numpy(img_masked.astype(np.float32)))
+			# 		index = torch.LongTensor([itemid - 1])
+
+			# 		cloud = Variable(cloud).cuda()
+			# 		choose = Variable(choose).cuda()
+			# 		img_masked = Variable(img_masked).cuda()
+			# 		index = Variable(index).cuda()
+
+			# 		cloud = cloud.view(1, num_points, 3)
+			# 		img_masked = img_masked.view(1, 3, img_masked.size()[1], img_masked.size()[2])
+
+			# 		pred_r, pred_t, pred_c, emb = estimator(img_masked, cloud, choose, index)
+			# 		pred_r = pred_r / torch.norm(pred_r, dim=2).view(1, num_points, 1)
+
+			# 		pred_c = pred_c.view(bs, num_points)
+			# 		how_max, which_max = torch.max(pred_c, 1)
+			# 		pred_t = pred_t.view(bs * num_points, 1, 3)
+			# 		points = cloud.view(bs * num_points, 1, 3)
+
+			# 		my_r = pred_r[0][which_max[0]].view(-1).cpu().data.numpy()
+			# 		my_t = (points + pred_t)[which_max[0]].view(-1).cpu().data.numpy()
+			# 		my_pred = np.append(my_r, my_t)
+			# 		my_result_wo_refine.append(my_pred.tolist())
+
+			# 		for ite in range(0, iteration):
+			# 			T = Variable(torch.from_numpy(my_t.astype(np.float32))).cuda().view(1, 3).repeat(num_points, 1).contiguous().view(1, num_points, 3)
+			# 			my_mat = quaternion_matrix(my_r)
+			# 			R = Variable(torch.from_numpy(my_mat[:3, :3].astype(np.float32))).cuda().view(1, 3, 3)
+			# 			my_mat[0][3] = my_t[0]
+			# 			my_mat[1][3] = my_t[1]
+			# 			my_mat[2][3] = my_t[2]
+						
+			# 			new_cloud = torch.bmm((cloud - T), R).contiguous()
+			# 			pred_r, pred_t = refiner(new_cloud, emb, index)
+			# 			pred_r = pred_r.view(1, 1, -1)
+			# 			pred_r = pred_r / (torch.norm(pred_r, dim=2).view(1, 1, 1))
+			# 			my_r_2 = pred_r.view(-1).cpu().data.numpy()
+			# 			my_t_2 = pred_t.view(-1).cpu().data.numpy()
+			# 			my_mat_2 = quaternion_matrix(my_r_2)
+
+			# 			my_mat_2[0][3] = my_t_2[0]
+			# 			my_mat_2[1][3] = my_t_2[1]
+			# 			my_mat_2[2][3] = my_t_2[2]
+
+			# 			my_mat_final = np.dot(my_mat, my_mat_2)
+			# 			my_r_final = copy.deepcopy(my_mat_final)
+			# 			my_r_final[0][3] = 0
+			# 			my_r_final[1][3] = 0
+			# 			my_r_final[2][3] = 0
+			# 			my_r_final = quaternion_from_matrix(my_r_final, True)
+			# 			my_t_final = np.array([my_mat_final[0][3], my_mat_final[1][3], my_mat_final[2][3]])
+
+			# 			my_pred = np.append(my_r_final, my_t_final)
+			# 			my_r = my_r_final
+			# 			my_t = my_t_final
+
+			# 		my_result.append(my_pred.tolist())
 
 def main():
 	# Globals
