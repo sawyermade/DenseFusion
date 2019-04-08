@@ -67,11 +67,17 @@ num_points_mesh = 500
 iteration = 2
 bs = 1
 
-def get_bbox(posecnn_rois):
-	rmin = int(posecnn_rois[idx][3]) + 1
-	rmax = int(posecnn_rois[idx][5]) - 1
-	cmin = int(posecnn_rois[idx][2]) + 1
-	cmax = int(posecnn_rois[idx][4]) - 1
+def get_bbox(posecnn_rois, idx=None):
+	if idx:
+		rmin = int(posecnn_rois[idx][3]) + 1
+		rmax = int(posecnn_rois[idx][5]) - 1
+		cmin = int(posecnn_rois[idx][2]) + 1
+		cmax = int(posecnn_rois[idx][4]) - 1
+	else:
+		rmin = int(posecnn_rois[1]) + 1
+		rmax = int(posecnn_rois[3]) - 1
+		cmin = int(posecnn_rois[0]) + 1
+		cmax = int(posecnn_rois[2]) - 1
 	r_b = rmax - rmin
 	for tt in range(len(border_list)):
 		if r_b > border_list[tt] and r_b < border_list[tt + 1]:
@@ -272,25 +278,37 @@ def upload_file():
 			bbList, maskList, scoreList, labelList = getLists(objDict)
 			img = Image.open(fpath1)
 			depth = np.array(Image.open(fpath2))
-			# posecnn_meta = scio.loadmat('{0}/results_PoseCNN_RSS2018/{1}.mat'.format(ycb_toolbox_dir, '%06d' % now))
-			# label = np.array(posecnn_meta['labels'])
-			# posecnn_rois = np.array(posecnn_meta['rois'])
+			posecnn_meta = scio.loadmat('mycode/samples/input/000000.mat')
+			label = np.array(posecnn_meta['labels'])
+			posecnn_rois = np.array(posecnn_meta['rois'])
+			lst = posecnn_rois[:, 1:2].flatten()
 
-			# lst = posecnn_rois[:, 1:2].flatten()
+			# Runs network and inference on masks
 			my_result_wo_refine = []
 			my_result = []
 			itemid = 1
-			for bb, mask, score, label in zip(bbList, maskList, scoreList, labelList):
+			
+			# for idx in range(len(lst)):
 			# 	itemid = lst[idx]
-				# try:
-				# rmin, rmax, cmin, cmax = get_bbox(posecnn_rois)
-				rmin, cmin, rmax, cmax = bb
-
+			# 	# try:
+			# 	rmin, rmax, cmin, cmax = get_bbox(posecnn_rois, idx)
+			# 	mask_depth = ma.getmaskarray(ma.masked_not_equal(depth, 0))
+			# 	mask_label = ma.getmaskarray(ma.masked_equal(label, itemid))
+			# 	mask = mask_label * mask_depth
+				
+			for bb, mask, score, label in zip(bbList, maskList, scoreList, labelList):
+				# cmin, rmin, cmax, rmax = bb
+				rmin, rmax, cmin, cmax = get_bbox(bb, None)
 				mask_depth = ma.getmaskarray(ma.masked_not_equal(depth, 0))
-				mask_label = ma.getmaskarray(ma.masked_equal(mask, 0))
+				mask_label = ma.getmaskarray(ma.masked_equal(mask, 1))
 				mask = mask_label * mask_depth
 
 				choose = mask[rmin:rmax, cmin:cmax].flatten().nonzero()[0]
+				# for i in range(rmin, rmax):
+				# 	for j in range(cmin, cmax):
+				# 		val = mask[i,j]
+				# 		print(val, end=' ')
+				# 	print()
 				# print(mask[rmin:rmax, cmin:cmax])
 				if len(choose) >= num_points:
 					c_mask = np.zeros(len(choose), dtype=int)
@@ -325,7 +343,7 @@ def upload_file():
 				img_masked = Variable(img_masked).cuda()
 				index = Variable(index).cuda()
 
-				print('DEBUG')
+				# print('DEBUG')
 				cloud = cloud.view(1, num_points, 3)
 				img_masked = img_masked.view(1, 3, img_masked.size()[1], img_masked.size()[2])
 
@@ -382,13 +400,24 @@ def upload_file():
 				# 	# my_result_wo_refine.append([0.0 for i in range(7)])
 				# 	my_result.append([0.0 for i in range(7)])
 
+			# DEBUG
 			# print(my_result)
+
+			# Creates return csv
 			retCsv = createCSV(objDict, my_result)
 			retStr = str()
 			with open(os.path.join(UPLOAD_FOLDER, 'pose.csv'), 'w') as of:
 				for line in retCsv:
 					retStr += line + '\n'
 					of.write(line + '\n')
+			
+			# retStr = str()
+			# with open(os.path.join(UPLOAD_FOLDER, 'pose.csv'), 'w') as of:
+			# 	for line in my_result:
+			# 		lineStr = ','.join([str(l) for l in line])
+			# 		retStr += ','.join([str(l) for l in line]) + '\n'
+			# 		of.write(lineStr + '\n')
+			
 			return retStr
 
 def main():
