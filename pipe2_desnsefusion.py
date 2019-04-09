@@ -68,7 +68,7 @@ iteration = 2
 bs = 1
 
 def get_bbox(posecnn_rois, idx=None):
-	if idx:
+	if idx != None:
 		rmin = int(posecnn_rois[idx][3]) + 1
 		rmax = int(posecnn_rois[idx][5]) - 1
 		cmin = int(posecnn_rois[idx][2]) + 1
@@ -278,32 +278,39 @@ def upload_file():
 			bbList, maskList, scoreList, labelList = getLists(objDict)
 			img = Image.open(fpath1)
 			depth = np.array(Image.open(fpath2))
-			posecnn_meta = scio.loadmat('mycode/samples/input/000000.mat')
-			label = np.array(posecnn_meta['labels'])
-			posecnn_rois = np.array(posecnn_meta['rois'])
-			lst = posecnn_rois[:, 1:2].flatten()
-
-			# Runs network and inference on masks
+			print('depth:\n', depth[:10, :10])
+			print('max depth:', depth.max())
 			my_result_wo_refine = []
 			my_result = []
 			itemid = 1
 			
+			# Original Network
+			# posecnn_meta = scio.loadmat('mycode/samples/input/000000.mat')
+			# label = np.array(posecnn_meta['labels'])
+			# posecnn_rois = np.array(posecnn_meta['rois'])
+			# lst = posecnn_rois[:, 1:2].flatten()
 			# for idx in range(len(lst)):
 			# 	itemid = lst[idx]
 			# 	# try:
+			# 	# cmin, rmin, cmax, rmax = int(posecnn_rois[idx][2]), int(posecnn_rois[idx][3]), int(posecnn_rois[idx][4]), int(posecnn_rois[idx][5])
 			# 	rmin, rmax, cmin, cmax = get_bbox(posecnn_rois, idx)
+			# 	print(cmin, rmin, cmax, rmax)
 			# 	mask_depth = ma.getmaskarray(ma.masked_not_equal(depth, 0))
 			# 	mask_label = ma.getmaskarray(ma.masked_equal(label, itemid))
 			# 	mask = mask_label * mask_depth
 				
 			for bb, mask, score, label in zip(bbList, maskList, scoreList, labelList):
 				# cmin, rmin, cmax, rmax = bb
+				# print(cmin, rmin, cmax, rmax)
 				rmin, rmax, cmin, cmax = get_bbox(bb, None)
+				# print(cmin, rmin, cmax, rmax)
 				mask_depth = ma.getmaskarray(ma.masked_not_equal(depth, 0))
 				mask_label = ma.getmaskarray(ma.masked_equal(mask, 1))
 				mask = mask_label * mask_depth
 
 				choose = mask[rmin:rmax, cmin:cmax].flatten().nonzero()[0]
+				# print(mask.shape)
+				# print(len(choose))
 				# for i in range(rmin, rmax):
 				# 	for j in range(cmin, cmax):
 				# 		val = mask[i,j]
