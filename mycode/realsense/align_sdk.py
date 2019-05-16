@@ -6,20 +6,20 @@
 #####################################################
 
 # First import the library
-import pyrealsense2 as rs
+import pyrealsense2 as rs2
 # Import Numpy for easy array manipulation
 import numpy as np
 # Import OpenCV for easy image rendering
 import cv2
 
 # Create a pipeline
-pipeline = rs.pipeline()
+pipeline = rs2.pipeline()
 
 #Create a config and configure the pipeline to stream
 #  different resolutions of color and depth streams
-config = rs.config()
-config.enable_stream(rs.stream.depth, 640, 360, rs.format.z16, 30)
-config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+config = rs2.config()
+config.enable_stream(rs2.stream.depth, 640, 360, rs2.format.z16, 30)
+config.enable_stream(rs2.stream.color, 640, 480, rs2.format.bgr8, 30)
 
 # Start streaming
 profile = pipeline.start(config)
@@ -37,8 +37,8 @@ clipping_distance = clipping_distance_in_meters / depth_scale
 # Create an align object
 # rs.align allows us to perform alignment of depth frames to others frames
 # The "align_to" is the stream type to which we plan to align depth frames.
-align_to = rs.stream.color
-align = rs.align(align_to)
+align_to = rs2.stream.color
+align = rs2.align(align_to)
 
 # Streaming loop
 try:

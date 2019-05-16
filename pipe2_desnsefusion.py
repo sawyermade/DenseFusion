@@ -1,9 +1,22 @@
 import os, sys, flask, werkzeug as wz, json, requests
 from zipfile import ZipFile
-# from urllib.parse import urljoin
-# DOMAIN = '127.0.0.1'
-DOMAIN = 'home.sawyer0.com'
-PORT = 666
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-m', '--model', type=str, default = '',  help='resume PoseNet model')
+parser.add_argument('-mr', '--refine_model', type=str, default = '',  help='resume PoseRefineNet model')
+parser.add_argument('-c', '--cuda', type=str, default = '',  help='Cuda card number to use')
+parser.add_argument('-ip', '--ip', type=str, default = '',  help='Domain or ip to use')
+parser.add_argument('-d', '--dip', type=str, default = '',  help='Domain or ip for Detectron server')
+parser.add_argument('-p', '--port', type=int, default = '',  help='Port to use')
+opt = parser.parse_args()
+if(len(sys.argv)) < 7:
+	opt.print_help()
+	sys.exit(1)
+
+# Sets up globals
+DOMAIN = opt.ip 
+PORT = opt.port 
 FULLDOMAIN = 'http://{}:{}'.format(DOMAIN, PORT)
 ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg', 'gif', 'tiff', 'bmp'])
 UPLOAD_FOLDER = 'uploads-pipe2'
@@ -13,13 +26,13 @@ args = None
 refiner = None
 estimator = None
 
+# Sets up cuda devices
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
-
-sys.path.insert(0, os.getcwd())
+os.environ["CUDA_VISIBLE_DEVICES"]=opt.cuda
 
 # import _init_paths
-import argparse
+sys.path.insert(0, os.getcwd())
+
 # import os
 import copy
 import random
@@ -44,21 +57,25 @@ from datasets.ycb.dataset import PoseDataset
 from lib.network import PoseNet, PoseRefineNet
 from lib.transformations import euler_matrix, quaternion_matrix, quaternion_from_matrix
 
-parser = argparse.ArgumentParser()
-# parser.add_argument('--dataset_root', type=str, default = '', help='dataset root dir')
-parser.add_argument('-m', '--model', type=str, default = '',  help='resume PoseNet model')
-parser.add_argument('-mr', '--refine_model', type=str, default = '',  help='resume PoseRefineNet model')
-opt = parser.parse_args()
-
 norm = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 border_list = [-1, 40, 80, 120, 160, 200, 240, 280, 320, 360, 400, 440, 480, 520, 560, 600, 640, 680]
 xmap = np.array([[j for i in range(640)] for j in range(480)])
 ymap = np.array([[i for i in range(640)] for j in range(480)])
-cam_cx = 312.9869
-cam_cy = 241.3109
-cam_fx = 1066.778
-cam_fy = 1067.487
-cam_scale = 10000.0
+
+# Original params
+# cam_cx = 312.9869
+# cam_cy = 241.3109
+# cam_fx = 1066.778
+# cam_fy = 1067.487
+# cam_scale = 10000.0
+
+# Intel RealSense D435 Params Color
+cam_cx = 327.69
+cam_cy = 242.552
+cam_fx = 618.2
+cam_fy = 618.74
+cam_scale = 0.0010000000474974513
+
 num_obj = 21
 img_width = 480
 img_length = 640
@@ -257,7 +274,7 @@ def upload_file():
 			file2.save(fpath2)
 
 			# Gets labels, bbox, and masks
-			retUrl = upload('http://127.0.0.1:665', fpath1)
+			retUrl = upload(FULLDOMAIN, fpath1)
 			objDict = downloadZip(retUrl, UPLOAD_FOLDER)
 			
 			# DEBUG 1
